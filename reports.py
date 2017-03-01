@@ -4,7 +4,7 @@ import json
 from bs4 import BeautifulSoup, Tag
 from markdown2 import Markdown, markdown_path
 
-def init(features):
+def init(features, extensions):
   page = BeautifulSoup("""<!doctype html>
 <html>
   <head>
@@ -16,6 +16,7 @@ def init(features):
         border: 1px solid silver;
         text-align: center;
       }
+      .header th {height:75px}
       .zero { background-color: #FFF; }
       .one { background-color: #FFAC66; }
       .two { background-color: #FFC966; }
@@ -30,14 +31,23 @@ def init(features):
   </body>
 </html>""", 'html.parser')
 
-  page = list_features(page, features)
+  page = list_features(page, features, extensions)
   return page
 
-def list_features(page, features):
+def is_extension(name):
+  extensions = ['as', 'authorizeClientKey', 'endpoints', 'followers', 'following', 'inbox', 'oauthClientAuthorize', 'outbox', 'preferredUsername', 'provideClientKey', 'proxyUrl', 'source', 'streams', 'uploadMedia']
+  return name in extensions
+
+def list_features(page, features, extensions):
 
   first = add_row(page)
   add_col(page, first, "th", "Feature / Implementation")
   for f in features:
+    r = add_row(page)
+    add_col(page, r, "th", f)
+  split = add_row(page)
+  add_col(page, split, "th", "Extensions")
+  for f in extensions:
     r = add_row(page)
     add_col(page, r, "th", f)
 
@@ -56,12 +66,6 @@ def get_features():
   l.remove("ldp")
   l.remove("as")
   l.remove("orderedItems")
-
-  # Move keys which are from stable extensions
-  ap = ["inbox", "outbox", "following", "followers", "streams", "preferredUsername", "endpoints", "uploadMedia", "proxyUrl", "oauthClientAuthorize", "provideClientKey", "authorizeClientKey", "source"]
-  for p in ap:
-    l.remove(p)
-
   return sorted(l)
 
 def add_row(page):
@@ -81,7 +85,16 @@ def add_col(page, row, tag, string):
 def parse_reports():
 
   features = get_features()
-  page = init(features)
+  feat = []
+  ext = []
+
+  for f in features:
+    if(is_extension(f)):
+      ext.append(f)
+    else:
+      feat.append(f)
+  
+  page = init(feat, ext)
   rows = page.table.find_all('tr')
   row = 0
   first = rows[row]
@@ -117,20 +130,28 @@ def parse_reports():
       # print imp_header_ele
       add_col(page, first, "th", imp_name)
 
-      if(row < len(features)):
-        for f in features:
+      if(row < len(feat) + len(ext)):
+        for f in feat:
           row = row + 1
           next_row = rows[row]
           if(is_implemented(f, soup)):
             add_col(page, next_row, "td", role)
           else:
             add_col(page, next_row, "td", "")
-  first = True
+
+        row = row + 1
+        # next_row = rows[row]
+        # add_col(page, next_row, "td", "")
+
+        for f in ext:
+          row = row + 1
+          next_row = rows[row]
+          if(is_implemented(f, soup)):
+            add_col(page, next_row, "td", role)
+          else:
+            add_col(page, next_row, "td", "")
   for r in rows:
-    if first:
-        first = False
-    else:
-      r = color_row(r)
+    r = color_row(r)
 
   return page
 
@@ -168,6 +189,15 @@ def is_implemented(feature, implementation_soup):
 def color_row(row):
   c = 0
   p = 0
+  headers = row.find_all("th")
+  for cell in headers:
+    if(cell.string == "Extensions"):
+      row["class"] = "header"
+      return row
+    elif(cell.string == "Feature / Implementation"):
+      row["class"] = "header"
+      return row
+
   cells = row.find_all("td")
   for cell in cells:
     if cell.string == "PC":
